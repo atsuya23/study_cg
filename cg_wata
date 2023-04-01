@@ -1,0 +1,69 @@
+import numpy as np
+import scipy.io as io
+import time
+
+def load_sparse_matrix(file_name):
+    """疎行列を読み込む関数"""
+    matrix_csr = io.mmread(file_name).tocsr()
+    size_of_matrix = io.mminfo(file_name)[0]
+    A = matrix_csr.toarray()
+    return A, size_of_matrix
+
+def diagonal_scaling(A):
+    """対角スケーリングを実装する関数"""
+    D = np.diag(np.sqrt(1.0 / np.diag(A)))
+    return D @ A @ D
+
+def write_log(file_name, res, num):
+    """ログを書き込む関数"""
+    with open(f"{file_name}_result.txt", "a") as file:
+        file.write(f"{num} {res}\n")
+
+def conjugate_gradient(A, b, x_init, file_name, size_of_matrix, max_iter=10000, eps=1.0e-10):
+    """共役勾配法でAx=bを解く関数"""
+    A = diagonal_scaling(A) # 対角スケーリング
+    x = x_init
+    r0 = b - A @ x
+    p = r0
+
+    v = np.zeros((size_of_matrix, 1))
+    w = np.zeros((size_of_matrix, 1))
+    s = r0
+    eta = 0
+
+    with open(file_name, 'w') as file:
+        for i in range(max_iter):
+            q = A @ p
+            alpha = float(np.dot(r0.T, r0) / np.dot(p.T, q))
+            v = (1-eta) * v + alpha * p
+            w = (1-eta) * w + alpha * q
+            eta = float(np.dot(s.T, w) / np.dot(w.T, w))
+            r1 = s - w
+            s = s - eta * w
+            x = x + eta * v
+            res = np.linalg.norm(s) / size_of_matrix
+            write_log(file_name, res, i+1)
+            print(i+1, res)
+            if res < eps:
+                return x
+            if res > 1.0e8:
+                print("発散したため計算を終了します")
+                break
+            beta = float(np.dot(r1.T, r1) / np.dot(r0.T, r0))
+            p = r1 + beta * p
+            r0 = r1
+    return x
+
+if __name__ == "__main__":
+    file_name = "crystm01.mtx"
+    A, size_of_matrix = load_sparse_matrix(file_name)
+
+    # b = Ax のxを求めている
+    b = np.ones((size_of_matrix, 1))
+    x0 = np.zeros((size_of_matrix, 1))
+
+    start = time.time()
+    ans = conjugate_gradient(A, b, x0, "crystm01", size_of_matrix)
+    end = time.time()
+
+    print("\n処理時間：", end - start, "秒")
